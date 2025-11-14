@@ -17,7 +17,6 @@ WITH s_lpc AS (
         )
         AND s_inner.visit_date <= l_inner.created_at
 ),
-
 lpc_attribution AS (
     SELECT
         s.visitor_id,
@@ -45,7 +44,6 @@ lpc_attribution AS (
     WHERE
         l.lead_id IS NULL OR s_lpc.attributed_lead_id IS NOT NULL
 ),
-
 ad_costs AS (
     SELECT
         campaign_date AS visit_date,
@@ -65,7 +63,6 @@ ad_costs AS (
     FROM
         ya_ads
 )
-
 SELECT
     DATE(lpc.visit_date) AS visit_date,
     lpc.utm_source,
@@ -111,3 +108,4 @@ ORDER BY
     utm_campaign ASC,
     revenue DESC NULLS LAST
 LIMIT 15;
+
