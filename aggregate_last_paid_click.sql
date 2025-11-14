@@ -17,7 +17,8 @@ WITH s_lpc AS (
         )
         AND s_inner.visit_date <= l_inner.created_at
 ),
-lpc_attribution AS (
+last_paid_click AS (
+    -- 1. Скрипт из первой задачи (LPC Attribution)
     SELECT
         s.visitor_id,
         s.visit_date,
@@ -45,52 +46,55 @@ lpc_attribution AS (
         l.lead_id IS NULL OR s_lpc.attributed_lead_id IS NOT NULL
 ),
 ad_costs AS (
+    -- 2. Добавляем CTE с рекламой (Расходы), агрегированные по дню
     SELECT
         campaign_date AS visit_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        daily_spent AS total_cost
-    FROM
-        vk_ads
-    UNION ALL
-    SELECT
-        campaign_date AS visit_date,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        daily_spent AS total_cost
-    FROM
-        ya_ads
+        SUM(daily_spent) AS total_cost
+    FROM (
+        SELECT
+            campaign_date,
+            utm_source,
+            utm_medium,
+            utm_campaign,
+            daily_spent
+        FROM vk_ads
+        UNION ALL
+        SELECT
+            campaign_date,
+            utm_source,
+            utm_medium,
+            utm_campaign,
+            daily_spent
+        FROM ya_ads
+    ) AS combined_ads
+    GROUP BY 1, 2, 3, 4
 )
 SELECT
     DATE(lpc.visit_date) AS visit_date,
     lpc.utm_source,
     lpc.utm_medium,
     lpc.utm_campaign,
-    COUNT(DISTINCT lpc.visitor_id) AS visitors_count,
-    COALESCE(SUM(ac.total_cost), 0) AS total_cost,
-    COUNT(DISTINCT lpc.lead_id)
-        AS leads_count,
-    COUNT(
-        DISTINCT CASE
-            WHEN
-                lpc.closing_reason = 'Успешно реализовано'
-                OR lpc.status_id = 142
-                THEN lpc.lead_id
-        END
-    ) AS purchases_count,
-    SUM(
-        CASE
-            WHEN
-                lpc.closing_reason = 'Успешно реализовано'
-                OR lpc.status_id = 142
-                THEN lpc.amount
-            ELSE 0
-        END
-    ) AS revenue
+    -- Метрики
+    COUNT(lpc.visitor_id) AS visitors_count,
+    -- ИСПРАВЛЕНИЕ: Оборачиваем total_cost в MAX(), т.к. он уже агрегирован в CTE ad_costs
+    COALESCE(MAX(ac.total_cost), 0) AS total_cost,
+    COUNT(DISTINCT lpc.lead_id) AS leads_count,
+    COUNT(DISTINCT CASE
+        WHEN
+            lpc.closing_reason = 'Успешно реализовано' OR lpc.status_id = 142
+            THEN lpc.lead_id
+    END) AS purchases_count,
+    SUM(CASE
+        WHEN
+            lpc.closing_reason = 'Успешно реализовано' OR lpc.status_id = 142
+            THEN lpc.amount
+        ELSE 0
+    END) AS revenue
 FROM
-    lpc_attribution AS lpc
+    last_paid_click AS lpc
 LEFT JOIN
     ad_costs AS ac
     ON
@@ -108,4 +112,3 @@ ORDER BY
     utm_campaign ASC,
     revenue DESC NULLS LAST
 LIMIT 15;
-
