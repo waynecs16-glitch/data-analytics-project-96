@@ -108,4 +108,3 @@ ORDER BY
     utm_campaign ASC,
     revenue DESC NULLS LAST
 LIMIT 15;
-
