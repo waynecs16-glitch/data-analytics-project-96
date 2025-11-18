@@ -1,52 +1,39 @@
-WITH s_lpc AS (
+WITH last_visits AS (
     SELECT
-        s_inner.visitor_id,
-        s_inner.visit_date,
-        s_inner.source,
-        s_inner.medium,
-        s_inner.campaign,
-        l_inner.lead_id,
-        l_inner.created_at,
-        l_inner.amount,
-        l_inner.closing_reason,
-        l_inner.status_id,
+        visitor_id,
+        visit_date,
+        source,
+        medium,
+        campaign,
         ROW_NUMBER() OVER (
-            -- ФИКС 1: Партиция по visitor_id
-            PARTITION BY s_inner.visitor_id
-            ORDER BY s_inner.visit_date DESC
+            PARTITION BY visitor_id
+            ORDER BY visit_date DESC
         ) AS rn
-    FROM
-        sessions AS s_inner
-    LEFT JOIN
-        leads AS l_inner
-        ON
-            s_inner.visitor_id = l_inner.visitor_id
-            AND s_inner.visit_date <= l_inner.created_at
-    WHERE
-        s_inner.medium NOT IN ('organic')
+    FROM sessions
+    WHERE medium NOT IN ('organic')
 )
 
 SELECT
-    s_lpc.visitor_id,
-    s_lpc.visit_date,
-    s_lpc.source AS utm_source,
-    s_lpc.medium AS utm_medium,
-    s_lpc.campaign AS utm_campaign,
-    s_lpc.lead_id,
-    s_lpc.created_at,
-    s_lpc.amount,
-    s_lpc.closing_reason,
-    s_lpc.status_id
-FROM
-    s_lpc
-WHERE
-    s_lpc.rn = 1
+    lv.visitor_id,
+    lv.visit_date,
+    lv.source AS utm_source,
+    lv.medium AS utm_medium,
+    lv.campaign AS utm_campaign,
+    l.lead_id,
+    l.created_at,
+    l.amount,
+    l.closing_reason,
+    l.status_id
+FROM last_visits AS lv
+LEFT JOIN leads AS l
+    ON
+        lv.visitor_id = l.visitor_id
+        AND lv.visit_date <= l.created_at
+WHERE lv.rn = 1
 ORDER BY
-    s_lpc.amount DESC NULLS LAST,
-    s_lpc.visit_date ASC,
-    utm_source ASC,
-    utm_medium ASC,
-    utm_campaign ASC
+    l.amount DESC NULLS LAST,
+    lv.visit_date ASC,
+    lv.source ASC,
+    lv.medium ASC,
+    lv.campaign ASC
 LIMIT 10;
-
-
