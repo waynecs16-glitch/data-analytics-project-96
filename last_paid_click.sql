@@ -17,7 +17,7 @@ WITH s_lpc AS (
         ) AS rn
     FROM
         sessions AS s_inner
-    INNER JOIN
+    LEFT JOIN
         leads AS l_inner
         ON
             s_inner.visitor_id = l_inner.visitor_id
@@ -48,4 +48,5 @@ ORDER BY
     utm_medium ASC,
     utm_campaign ASC
 LIMIT 10;
+
 
