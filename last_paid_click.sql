@@ -12,7 +12,6 @@ WITH last_visits AS (
     FROM sessions
     WHERE medium NOT IN ('organic')
 )
-
 SELECT
     lv.visitor_id,
     lv.visit_date,
@@ -37,3 +36,4 @@ ORDER BY
     lv.medium ASC,
     lv.campaign ASC
 LIMIT 10;
+
