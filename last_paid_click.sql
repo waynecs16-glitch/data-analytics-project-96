@@ -27,7 +27,7 @@ WITH lpc AS (
                 ORDER BY s.visit_date DESC
             ) AS rn
         FROM sessions AS s
-        INNER JOIN leads AS l
+        LEFT JOIN leads AS l
             ON
                 s.visitor_id = l.visitor_id
                 AND s.visit_date <= l.created_at
@@ -55,5 +55,6 @@ ORDER BY
     lpc.medium ASC,
     lpc.campaign ASC
 LIMIT 10;
+
 
 
