@@ -55,6 +55,3 @@ ORDER BY
     lpc.medium ASC,
     lpc.campaign ASC
 LIMIT 10;
-
-
-
