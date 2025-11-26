@@ -95,8 +95,8 @@ SELECT
     ad.utm_campaign,
     ad.leads_count,
     ad.purchases_count,
-    NULLIF (ac.total_cost, 0) AS total_cost,
-    NILLIF (ad.revenue, 0) AS revenue
+    NULLIF(ac.total_cost, 0) AS total_cost,
+    NILLIF(ad.revenue, 0) AS revenue
 FROM aggregated_data AS ad
 LEFT JOIN ads_costs AS ac
     ON
@@ -112,8 +112,3 @@ ORDER BY
     ad.utm_medium ASC,
     ad.utm_campaign ASC
 LIMIT 15;
-
-
-
-
-
