@@ -105,13 +105,14 @@ LEFT JOIN ads_costs AS ac
         AND ad.utm_medium = ac.utm_medium
         AND ad.utm_campaign = ac.utm_campaign
 ORDER BY
+    ad.revenue DESC NULLS LAST,
     ad.visit_date ASC,
     ad.visitors_count DESC,
     ad.utm_source ASC,
     ad.utm_medium ASC,
-    ad.utm_campaign ASC,
-    ad.revenue DESC NULLS LAST
+    ad.utm_campaign ASC
 LIMIT 15;
+
 
 
 
