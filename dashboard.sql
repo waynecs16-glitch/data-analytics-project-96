@@ -1,58 +1,72 @@
-WITH s_lpc AS (
+WITH lpc AS (
     SELECT
-        s_inner.*,
-        l_inner.lead_id AS attributed_lead_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY l_inner.lead_id
-            ORDER BY s_inner.visit_date DESC
-        ) AS rn
-    FROM
-        sessions AS s_inner
-    INNER JOIN
-        leads AS l_inner
-        ON s_inner.visitor_id = l_inner.visitor_id
-    WHERE
-        s_inner.medium IN (
-            'cpc', 'cpm', 'cpa', 'youtube', 'cpp', 'tg', 'social'
-        )
-        AND s_inner.visit_date <= l_inner.created_at
+        s_lpc.visitor_id,
+        s_lpc.visit_date,
+        s_lpc.source,
+        s_lpc.medium,
+        s_lpc.campaign,
+        s_lpc.lead_id,
+        s_lpc.created_at,
+        s_lpc.amount,
+        s_lpc.closing_reason,
+        s_lpc.status_id
+    FROM (
+        SELECT
+            s.visitor_id,
+            s.visit_date,
+            s.source,
+            s.medium,
+            s.campaign,
+            l.lead_id,
+            l.created_at,
+            l.amount,
+            l.closing_reason,
+            l.status_id,
+            ROW_NUMBER() OVER (
+                PARTITION BY s.visitor_id
+                ORDER BY s.visit_date DESC
+            ) AS rn
+        FROM sessions AS s
+        LEFT JOIN leads AS l
+            ON
+                s.visitor_id = l.visitor_id
+                AND s.visit_date <= l.created_at
+        WHERE s.medium NOT IN ('organic')
+    ) AS s_lpc
+    WHERE s_lpc.rn = 1
 ),
 
-lpc_attribution AS (
+aggregated_data AS (
     SELECT
-        s.visitor_id,
-        s.visit_date,
-        l.lead_id,
-        l.created_at,
-        l.amount,
-        l.closing_reason,
-        l.status_id,
-        COALESCE(s_lpc.source, s.source) AS utm_source,
-        COALESCE(s_lpc.medium, s.medium) AS utm_medium,
-        COALESCE(s_lpc.campaign, s.campaign) AS utm_campaign
-    FROM
-        sessions AS s
-    LEFT JOIN
-        leads AS l
-        ON
-            s.visitor_id = l.visitor_id
-            AND s.visit_date <= l.created_at
-    LEFT JOIN s_lpc
-        ON
-            s.visitor_id = s_lpc.visitor_id
-            AND s.visit_date = s_lpc.visit_date
-            AND s_lpc.rn = 1
-    WHERE
-        l.lead_id IS NULL OR s_lpc.attributed_lead_id IS NOT NULL
+        source AS utm_source,
+        medium AS utm_medium,
+        campaign AS utm_campaign,
+        DATE(visit_date) AS visit_date,
+        COUNT(visitor_id) AS visitors_count,
+        COUNT(lead_id) AS leads_count,
+        COUNT(CASE
+            WHEN status_id = 142
+                THEN lead_id
+        END) AS purchases_count,
+        SUM(CASE
+            WHEN status_id = 142
+                THEN amount
+        END) AS revenue
+    FROM lpc
+    GROUP BY
+        DATE(visit_date),
+        source,
+        medium,
+        campaign
 ),
 
-ad_costs_daily AS (
+ads_costs AS (
     SELECT
         campaign_date AS visit_date,
         utm_source,
         utm_medium,
         utm_campaign,
-        SUM(daily_spent) AS total_cost_daily
+        SUM(daily_spent) AS total_cost
     FROM (
         SELECT
             campaign_date,
@@ -69,60 +83,31 @@ ad_costs_daily AS (
             utm_campaign,
             daily_spent
         FROM ya_ads
-    ) AS combined_ads
-    GROUP BY 1, 2, 3, 4
-),
-
-aggregated_performance_daily AS (
-    SELECT
-        DATE(lpc.visit_date) AS visit_date,
-        lpc.utm_source,
-        lpc.utm_medium,
-        lpc.utm_campaign,
-        COUNT(DISTINCT lpc.visitor_id) AS visitors_count,
-        COUNT(DISTINCT lpc.lead_id)
-            AS leads_count,
-        COUNT(
-            DISTINCT CASE
-                WHEN
-                    lpc.closing_reason = 'Успешно реализовано'
-                    OR lpc.status_id = 142
-                    THEN lpc.lead_id
-            END
-        ) AS purchases_count,
-        SUM(
-            CASE
-                WHEN
-                    lpc.closing_reason = 'Успешно реализовано'
-                    OR lpc.status_id = 142
-                    THEN lpc.amount
-                ELSE 0
-            END
-        ) AS revenue
-    FROM
-        lpc_attribution AS lpc
-    GROUP BY
-        1, 2, 3, 4
+    ) AS all_ads
+    GROUP BY campaign_date, utm_source, utm_medium, utm_campaign
 )
 
 SELECT
-    apd.visit_date,
-    apd.utm_source,
-    apd.utm_medium,
-    apd.utm_campaign,
-    apd.visitors_count,
-    apd.leads_count,
-    apd.purchases_count,
-    COALESCE(acd.total_cost_daily, 0) AS total_cost
-FROM
-    aggregated_performance_daily AS apd
-LEFT JOIN
-    ad_costs_daily AS acd
+    ad.visit_date,
+    ad.visitors_count,
+    ad.utm_source,
+    ad.utm_medium,
+    ad.utm_campaign,
+    ad.leads_count,
+    ad.purchases_count,
+    NULLIF(ac.total_cost, 0) AS total_cost,
+    NILLIF(ad.revenue, 0) AS revenue
+FROM aggregated_data AS ad
+LEFT JOIN ads_costs AS ac
     ON
-        apd.visit_date = acd.visit_date
-        AND apd.utm_source = acd.utm_source
-        AND apd.utm_medium = acd.utm_medium
-        AND apd.utm_campaign = acd.utm_campaign
+        ad.visit_date = ac.visit_date
+        AND ad.utm_source = ac.utm_source
+        AND ad.utm_medium = ac.utm_medium
+        AND ad.utm_campaign = ac.utm_campaign
 ORDER BY
-    apd.visit_date ASC,
-    apd.utm_source ASC;
+    ad.visit_date ASC,
+    ad.visitors_count DESC,
+    ad.utm_source ASC,
+    ad.utm_medium ASC,
+    ad.utm_campaign ASC,
+    ad.revenue DESC NULLS LAST;
